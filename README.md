@@ -255,9 +255,8 @@ ztk --help
 
 # Screenshots
 
-```text
-Insert terminal screenshots here
-```
+<img src="assets/ss1.png" alt="Screenshot 1" width="400">
+<img src="assets/ss2.png" alt="Screenshot 2" width="400">
 
 ---
 
