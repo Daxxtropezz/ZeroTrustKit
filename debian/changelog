@@ -1,5 +1,17 @@
-ztk (1.0.0-1) UNRELEASED; urgency=medium
+ztk (1.0.2-1) resolute; urgency=medium
 
-  * Initial release. (Closes: #nnnn)  <nnnn is the bug number of your ITP>
+  * Initial release for resolute.
+
+ -- Daxxtropezz <miraflores.john@gmail.com>  Sun, 07 Jun 2026 16:53:34 +0800
+
+ztk (1.0.1-1) noble; urgency=medium
+
+  * Initial release for noble.
+
+ -- Daxxtropezz <miraflores.john@gmail.com>  Sun, 07 Jun 2026 16:49:57 +0800
+
+ztk (1.0.0-1) jammy; urgency=medium
+
+  * Initial release. 
 
  -- Daxxtropezz <miraflores.john@gmail.com>  Sun, 07 Jun 2026 16:29:07 +0800

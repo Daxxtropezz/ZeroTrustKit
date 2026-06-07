@@ -1,37 +1,32 @@
 Source: ztk
 Section: utils
 Priority: optional
-Maintainer: Daxxtropezz miraflores.john@gmail.com
+Maintainer: Daxxtropezz <miraflores.john@gmail.com>
 Rules-Requires-Root: no
 Build-Depends:
-debhelper-compat (= 13),
+ debhelper-compat (= 13),
 Standards-Version: 4.7.2
 Homepage: https://github.com/daxxtropezz/ZeroTrustKit
-#Vcs-Browser: https://github.com/daxxtropezz/ZeroTrustKit
-#Vcs-Git: https://github.com/daxxtropezz/ZeroTrustKit.git
 
 Package: ztk
 Architecture: all
 Depends:
-${misc},
-bash,
-curl,
-wget,
-sudo,
-figlet,
-lolcat,
-fastfetch
+ ${misc:Depends}, 
+ bash,
+ curl,
+ wget,
+ sudo
 Description: DevSecOps bootstrap platform for Ubuntu
-ZeroTrustKit (ZTK) is a terminal-first DevSecOps bootstrap
-platform that automates the installation and management of
-cloud, infrastructure, security, container, and Kubernetes
-tooling on Ubuntu systems.
-.
-It provides an interactive queue-based interface for
-installing and updating Terraform, Docker, Kubernetes,
-AWS CLI, Google Cloud SDK, Ansible, Trivy, Snyk, Nmap,
-Python, and other essential DevSecOps utilities.
-.
-Designed for platform engineers, DevOps engineers,
-DevSecOps practitioners, cloud architects, and security
-professionals seeking rapid workstation provisioning.
+ ZeroTrustKit (ZTK) is a terminal-first DevSecOps bootstrap
+ platform that automates the installation and management of
+ cloud, infrastructure, security, container, and Kubernetes
+ tooling on Ubuntu systems.
+ .
+ It provides an interactive queue-based interface for
+ installing and updating Terraform, Docker, Kubernetes,
+ AWS CLI, Google Cloud SDK, Ansible, Trivy, Snyk, Nmap,
+ Python, and other essential DevSecOps utilities.
+ .
+ Designed for platform engineers, DevOps engineers,
+ DevSecOps practitioners, cloud architects, and security
+ professionals seeking rapid workstation provisioning.
