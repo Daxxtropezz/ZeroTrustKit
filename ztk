@@ -1,0 +1,602 @@
+#!/bin/bash
+
+#===============================================================================
+#  ZeroTrustKit - DevSecOps Bootstrap Platform
+#  Author: Daxxtropezz  
+#  Version: 1.0.0
+#===============================================================================
+
+SCRIPT_NAME="ztk"
+SCRIPT_VERSION="1.0.0"
+APP_NAME="ZeroTrustKit"
+APP_AUTHOR="Daxxtropezz"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+Lavender='\033[0;34m'
+CYAN='\033[0;36m'
+WHITE='\033[1;37m'
+BOLD='\033[1m'
+DIM='\033[2m'
+RESET='\033[0m'
+
+# Queue
+declare -a INSTALL_QUEUE=()
+
+# Tool definitions
+declare -A TOOLS
+TOOLS[1]="base_packages"
+TOOLS[2]="git"
+TOOLS[3]="terraform"
+TOOLS[4]="aws_cli"
+TOOLS[5]="docker"
+TOOLS[6]="docker_compose"
+TOOLS[7]="lazydocker"
+TOOLS[8]="ansible"
+TOOLS[9]="snyk"
+TOOLS[10]="trivy"
+TOOLS[11]="gcp"
+TOOLS[12]="kubernetes"
+TOOLS[13]="helm"
+TOOLS[14]="minikube"
+TOOLS[15]="nmap"
+TOOLS[16]="python"
+
+# Tool display names
+declare -A TOOL_DISPLAY
+TOOL_DISPLAY[base_packages]="Base Packages (curl, wget, git, unzip, build-essential, etc)"
+TOOL_DISPLAY[git]="Git - Version Control"
+TOOL_DISPLAY[terraform]="Terraform - Infrastructure as Code"
+TOOL_DISPLAY[aws_cli]="AWS CLI - Amazon Web Services"
+TOOL_DISPLAY[docker]="Docker - Container Platform"
+TOOL_DISPLAY[docker_compose]="Docker Compose - Multi-container Applications"
+TOOL_DISPLAY[lazydocker]="Lazydocker - Docker TUI"
+TOOL_DISPLAY[ansible]="Ansible - Automation & Configuration Management"
+TOOL_DISPLAY[snyk]="Snyk - Vulnerability Scanning"
+TOOL_DISPLAY[trivy]="Trivy - Security Scanner"
+TOOL_DISPLAY[gcp]="Google Cloud SDK - GCP Tools"
+TOOL_DISPLAY[kubernetes]="Kubernetes Tools (kubectl)"
+TOOL_DISPLAY[helm]="Helm - Kubernetes Package Manager"
+TOOL_DISPLAY[minikube]="Minikube - Local Kubernetes Cluster"
+TOOL_DISPLAY[nmap]="Nmap - Network Discovery"
+TOOL_DISPLAY[python]="Python 3 + pip + virtualenv"
+
+#===============================================================================
+#  UTILITY FUNCTIONS
+#===============================================================================
+
+clear_screen() {
+    printf "\033[2J\033[1;1H\033[3J"
+    clear 2>/dev/null || printf "\033c"
+}
+
+tool_installed() {
+    case "$1" in
+        base_packages) return 1 ;; # Always install/update base packages
+        git) command -v git >/dev/null 2>&1 ;;
+        terraform) command -v terraform >/dev/null 2>&1 ;;
+        aws_cli) command -v aws >/dev/null 2>&1 ;;
+        docker) command -v docker >/dev/null 2>&1 ;;
+        docker_compose) command -v docker-compose >/dev/null 2>&1 || docker compose version >/dev/null 2>&1 ;;
+        lazydocker) command -v lazydocker >/dev/null 2>&1 ;;
+        ansible) command -v ansible >/dev/null 2>&1 ;;
+        snyk) command -v snyk >/dev/null 2>&1 ;;
+        trivy) command -v trivy >/dev/null 2>&1 ;;
+        gcp) command -v gcloud >/dev/null 2>&1 ;;
+        kubernetes) command -v kubectl >/dev/null 2>&1 ;;
+        helm) command -v helm >/dev/null 2>&1 ;;
+        minikube) command -v minikube >/dev/null 2>&1 ;;
+        nmap) command -v nmap >/dev/null 2>&1 ;;
+        python) command -v python3 >/dev/null 2>&1 ;;
+        *) return 1 ;;
+    esac
+}
+
+update_if_installed() {
+    local tool="$1"
+    if [ "$tool" != "base_packages" ] && tool_installed "$tool"; then
+        echo -e "${YELLOW}→ Updating ${TOOL_DISPLAY[$tool]} to latest version...${RESET}"
+        return 0
+    fi
+    return 1
+}
+
+#===============================================================================
+#  INSTALLATION FUNCTIONS
+#===============================================================================
+
+install_base_packages() {
+    echo -e "${CYAN}→ Installing base packages...${RESET}"
+    sudo apt update -qq
+    sudo apt install -y \
+        curl \
+        wget \
+        git \
+        unzip \
+        gnupg2 \
+        software-properties-common \
+        build-essential \
+        apt-transport-https \
+        ca-certificates \
+        jq \
+        tree \
+        htop \
+        tmux \
+        zsh \
+        || echo -e "${RED}⚠ Some base packages failed to install${RESET}"
+    echo -e "${GREEN}✓ Base packages installed${RESET}"
+}
+
+install_git() {
+    if update_if_installed git; then
+        sudo apt update -qq && sudo apt upgrade -y git
+        echo -e "${GREEN}✓ Git updated to latest version${RESET}"
+        return 0
+    fi
+    echo -e "${CYAN}→ Installing Git...${RESET}"
+    sudo apt install -y git
+    echo -e "${GREEN}✓ Git installed${RESET}"
+}
+
+install_terraform() {
+    if update_if_installed terraform; then
+        sudo apt update -qq && sudo apt upgrade -y terraform
+        echo -e "${GREEN}✓ Terraform updated to latest version${RESET}"
+        return 0
+    fi
+    echo -e "${CYAN}→ Installing Terraform...${RESET}"
+    wget -qO- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list > /dev/null
+    sudo apt update -qq
+    sudo apt install -y terraform
+    echo -e "${GREEN}✓ Terraform installed${RESET}"
+}
+
+install_aws_cli() {
+    if update_if_installed aws_cli; then
+        curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
+        unzip -q /tmp/awscliv2.zip -d /tmp
+        sudo /tmp/aws/install --update
+        rm -rf /tmp/aws /tmp/awscliv2.zip
+        echo -e "${GREEN}✓ AWS CLI updated to latest version${RESET}"
+        return 0
+    fi
+    echo -e "${CYAN}→ Installing AWS CLI...${RESET}"
+    curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
+    unzip -q /tmp/awscliv2.zip -d /tmp
+    sudo /tmp/aws/install
+    rm -rf /tmp/aws /tmp/awscliv2.zip
+    echo -e "${GREEN}✓ AWS CLI installed${RESET}"
+}
+
+install_docker() {
+    if update_if_installed docker; then
+        sudo apt update -qq && sudo apt upgrade -y docker-ce
+        echo -e "${GREEN}✓ Docker updated to latest version${RESET}"
+        return 0
+    fi
+    echo -e "${CYAN}→ Installing Docker...${RESET}"
+    curl -fsSL https://get.docker.com | sudo sh
+    sudo usermod -aG docker "$USER"
+    echo -e "${GREEN}✓ Docker installed${RESET}"
+}
+
+install_docker_compose() {
+    if update_if_installed docker_compose; then
+        sudo rm -f /usr/local/bin/docker-compose
+        sudo curl -sL "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        sudo chmod +x /usr/local/bin/docker-compose
+        echo -e "${GREEN}✓ Docker Compose updated to latest version${RESET}"
+        return 0
+    fi
+    echo -e "${CYAN}→ Installing Docker Compose...${RESET}"
+    sudo curl -sL "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+    sudo chmod +x /usr/local/bin/docker-compose
+    echo -e "${GREEN}✓ Docker Compose installed${RESET}"
+}
+
+install_lazydocker() {
+    if update_if_installed lazydocker; then
+        sudo rm -f /usr/local/bin/lazydocker
+        curl -sL https://github.com/jesseduffield/lazydocker/releases/latest/download/lazydocker_Linux_x86_64.tar.gz | tar xz
+        sudo mv lazydocker /usr/local/bin/
+        echo -e "${GREEN}✓ Lazydocker updated to latest version${RESET}"
+        return 0
+    fi
+    echo -e "${CYAN}→ Installing Lazydocker...${RESET}"
+    curl -sL https://github.com/jesseduffield/lazydocker/releases/latest/download/lazydocker_Linux_x86_64.tar.gz | tar xz
+    sudo mv lazydocker /usr/local/bin/
+    echo -e "${GREEN}✓ Lazydocker installed${RESET}"
+}
+
+install_ansible() {
+    if update_if_installed ansible; then
+        sudo apt update -qq && sudo apt upgrade -y ansible
+        echo -e "${GREEN}✓ Ansible updated to latest version${RESET}"
+        return 0
+    fi
+    echo -e "${CYAN}→ Installing Ansible...${RESET}"
+    sudo apt-add-repository --yes --update ppa:ansible/ansible
+    sudo apt install -y ansible
+    echo -e "${GREEN}✓ Ansible installed${RESET}"
+}
+
+install_snyk() {
+    if update_if_installed snyk; then
+        sudo rm -f /usr/local/bin/snyk
+        curl -sL https://static.snyk.io/cli/latest/snyk-linux -o /tmp/snyk
+        sudo mv /tmp/snyk /usr/local/bin/snyk
+        sudo chmod +x /usr/local/bin/snyk
+        echo -e "${GREEN}✓ Snyk updated to latest version${RESET}"
+        return 0
+    fi
+    echo -e "${CYAN}→ Installing Snyk...${RESET}"
+    curl -sL https://static.snyk.io/cli/latest/snyk-linux -o /tmp/snyk
+    sudo mv /tmp/snyk /usr/local/bin/snyk
+    sudo chmod +x /usr/local/bin/snyk
+    echo -e "${GREEN}✓ Snyk installed${RESET}"
+}
+
+install_trivy() {
+    if update_if_installed trivy; then
+        sudo apt update -qq && sudo apt upgrade -y trivy
+        echo -e "${GREEN}✓ Trivy updated to latest version${RESET}"
+        return 0
+    fi
+    echo -e "${CYAN}→ Installing Trivy...${RESET}"
+    sudo apt install -y wget gnupg
+    wget -qO- https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg
+    echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list
+    sudo apt update -qq
+    sudo apt install -y trivy
+    echo -e "${GREEN}✓ Trivy installed${RESET}"
+}
+
+install_gcp() {
+    if update_if_installed gcp; then
+        sudo apt update -qq && sudo apt upgrade -y google-cloud-sdk
+        echo -e "${GREEN}✓ Google Cloud SDK updated to latest version${RESET}"
+        return 0
+    fi
+    echo -e "${CYAN}→ Installing Google Cloud SDK...${RESET}"
+    sudo rm -f /etc/apt/sources.list.d/google-cloud-sdk.list
+    echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list
+    curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
+    sudo apt update -qq
+    sudo apt install -y google-cloud-sdk
+    echo -e "${GREEN}✓ Google Cloud SDK installed${RESET}"
+}
+
+install_kubernetes() {
+    if update_if_installed kubernetes; then
+        curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+        rm kubectl
+        echo -e "${GREEN}✓ Kubectl updated to latest version${RESET}"
+        return 0
+    fi
+    echo -e "${CYAN}→ Installing Kubectl...${RESET}"
+    curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+    sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+    rm kubectl
+    echo -e "${GREEN}✓ Kubectl installed${RESET}"
+}
+
+install_helm() {
+    if update_if_installed helm; then
+        curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+        chmod 700 get_helm.sh
+        ./get_helm.sh
+        rm get_helm.sh
+        echo -e "${GREEN}✓ Helm updated to latest version${RESET}"
+        return 0
+    fi
+    echo -e "${CYAN}→ Installing Helm...${RESET}"
+    curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+    chmod 700 get_helm.sh
+    ./get_helm.sh
+    rm get_helm.sh
+    echo -e "${GREEN}✓ Helm installed${RESET}"
+}
+
+install_minikube() {
+    if update_if_installed minikube; then
+        curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+        sudo install minikube-linux-amd64 /usr/local/bin/minikube
+        rm minikube-linux-amd64
+        echo -e "${GREEN}✓ Minikube updated to latest version${RESET}"
+        return 0
+    fi
+    echo -e "${CYAN}→ Installing Minikube...${RESET}"
+    curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+    sudo install minikube-linux-amd64 /usr/local/bin/minikube
+    rm minikube-linux-amd64
+    echo -e "${GREEN}✓ Minikube installed${RESET}"
+}
+
+install_nmap() {
+    if update_if_installed nmap; then
+        sudo apt update -qq && sudo apt upgrade -y nmap
+        echo -e "${GREEN}✓ Nmap updated to latest version${RESET}"
+        return 0
+    fi
+    echo -e "${CYAN}→ Installing Nmap...${RESET}"
+    sudo apt install -y nmap
+    echo -e "${GREEN}✓ Nmap installed${RESET}"
+}
+
+install_python() {
+    if update_if_installed python; then
+        sudo apt update -qq && sudo apt upgrade -y python3 python3-pip python3-venv
+        pip3 install --upgrade pip
+        echo -e "${GREEN}✓ Python tools updated to latest version${RESET}"
+        return 0
+    fi
+    echo -e "${CYAN}→ Installing Python 3, pip, and virtualenv...${RESET}"
+    sudo apt install -y python3 python3-pip python3-venv python3-dev
+    pip3 install --upgrade pip
+    echo -e "${GREEN}✓ Python 3, pip, and virtualenv installed${RESET}"
+}
+
+#===============================================================================
+#  DISPLAY FUNCTIONS
+#===============================================================================
+
+show_banner() {
+    if command -v figlet >/dev/null 2>&1 && command -v lolcat >/dev/null 2>&1; then
+        figlet -f slant $APP_NAME 2>/dev/null | lolcat 2>/dev/null
+    elif command -v figlet >/dev/null 2>&1; then
+        figlet -f slant $APP_NAME 2>/dev/null
+    else
+        echo -e "${CYAN}"
+        echo " Install the figlet, lolcat packages for better visuals! "
+        echo -e "${RESET}"
+    fi
+    echo -e "${BOLD}${WHITE}  ═══════════════════════════════════════════════════════════════════════════════════════${RESET}"
+    echo -e "${BOLD}${WHITE}                  DevSecOps Bootstrap Platform v$SCRIPT_VERSION | Author: $APP_AUTHOR${RESET}"
+    echo -e "${BOLD}${WHITE}  ═══════════════════════════════════════════════════════════════════════════════════════${RESET}"
+}
+
+show_menu() {
+    clear_screen
+    show_banner
+    
+    # Show system info
+    echo -e "  ${CYAN}System:${RESET} $(uname -n)  |  ${CYAN}User:${RESET} $USER  |  ${CYAN}Date:${RESET} $(date '+%Y-%m-%d %H:%M:%S')"
+    
+    echo -e "${BOLD}${WHITE}┌─────────────────────────────────────────────────────────────────────────────┐${RESET}"
+    echo -e "${BOLD}${WHITE}│                             AVAILABLE TOOLS                                 │${RESET}"
+    echo -e "${BOLD}${WHITE}└─────────────────────────────────────────────────────────────────────────────┘${RESET}"
+    echo -e "${BOLD}${WHITE} LEGEND ${RESET}"
+    echo -e "  ${GREEN}● Green Number${RESET} = Tool selected for installation/update"
+    echo -e "  ${Lavender}● Lavender Number${RESET}   = Tool not selected"
+    # echo -e "  ${GREEN}[INSTALLED]${RESET}     = Tool is already installed (will update to latest)"
+    # echo -e "  ${RED}[NOT INSTALLED]${RESET}  = Tool needs installation"
+    # echo -e "  ${GREEN}▶${RESET}              = Selected indicator"
+    echo ""
+    
+    # Show tools
+    for i in {1..16}; do
+        tool="${TOOLS[$i]}"
+        
+        # Check installation status
+        if tool_installed "$tool"; then
+            status="${GREEN}[INSTALLED]${RESET}"
+        else
+            status="${RED}[NOT INSTALLED]${RESET}"
+        fi
+        
+        # Check if in queue
+        in_queue=false
+        for queued in "${INSTALL_QUEUE[@]}"; do
+            if [ "$queued" = "$tool" ]; then
+                in_queue=true
+                break
+            fi
+        done
+        
+        # Format the line with proper spacing
+        if [ "$in_queue" = true ]; then
+            printf "  ${GREEN}%2d${RESET}. ${GREEN}▶${RESET} %-55s %b\n" "$i" "${TOOL_DISPLAY[$tool]}" "$status"
+        else
+            printf "  ${Lavender}%2d${RESET}.   %-55s %b\n" "$i" "${TOOL_DISPLAY[$tool]}" "$status"
+        fi
+    done
+
+    # Show queue count
+    if [ ${#INSTALL_QUEUE[@]} -gt 0 ]; then
+        echo -e "  ${GREEN}📦 Queue: ${#INSTALL_QUEUE[@]} tool(s) selected for installation/update${RESET}"
+    fi
+    
+    echo -e "${BOLD}${WHITE}════════════════════════════════════════════════════════════════════════════════${RESET}"
+    echo -e "${BOLD}${WHITE} CONTROLS ${RESET}"
+    echo -e "  ${GREEN}[1-16]${RESET}  →  Select/Deselect tool for installation/update"
+    echo -e "  ${GREEN}[0]${RESET}     →  Execute installation queue"
+    echo -e "  ${GREEN}[C]${RESET}     →  Clear all selections"
+    echo -e "  ${GREEN}[R]${RESET}     →  Refresh screen"
+    echo -e "  ${RED}[Q]${RESET}     →  Quit"
+    echo -e "${BOLD}${WHITE}════════════════════════════════════════════════════════════════════════════════${RESET}"
+}
+
+#===============================================================================
+#  QUEUE MANAGEMENT
+#===============================================================================
+
+toggle_queue() {
+    local num="$1"
+    local tool="${TOOLS[$num]}"
+    local new_queue=()
+    local found=false
+    
+    # Check if tool is already in queue
+    for queued in "${INSTALL_QUEUE[@]}"; do
+        if [ "$queued" = "$tool" ]; then
+            found=true
+        else
+            new_queue+=("$queued")
+        fi
+    done
+    
+    if [ "$found" = true ]; then
+        INSTALL_QUEUE=("${new_queue[@]}")
+    else
+        INSTALL_QUEUE+=("$tool")
+    fi
+}
+
+clear_queue() {
+    INSTALL_QUEUE=()
+}
+
+execute_queue() {
+    if [ ${#INSTALL_QUEUE[@]} -eq 0 ]; then
+        echo -e "${YELLOW}⚠ Queue is empty. Select tools first.${RESET}"
+        sleep 2
+        return
+    fi
+    
+    clear_screen
+    show_banner
+    echo -e "${BOLD}${CYAN}  ⚡ EXECUTING INSTALLATION QUEUE${RESET}\n"
+    echo -e "  Tools to install/update: ${#INSTALL_QUEUE[@]}\n"
+    echo -e "${BOLD}${WHITE}════════════════════════════════════════════════════════════════════════════════${RESET}\n"
+    
+    for tool in "${INSTALL_QUEUE[@]}"; do
+        echo -e "\n${BOLD}─── Processing ${TOOL_DISPLAY[$tool]} ───${RESET}\n"
+        "install_$tool"
+        echo ""
+        sleep 1
+    done
+    
+    echo -e "${BOLD}${WHITE}════════════════════════════════════════════════════════════════════════════════${RESET}"
+    echo -e "\n${GREEN}✓ All operations completed!${RESET}"
+    
+    INSTALL_QUEUE=()
+    echo -e "\n${DIM}Press Enter to continue...${RESET}"
+    read -r
+}
+
+#===============================================================================
+#  MAIN
+#===============================================================================
+
+interactive_mode() {
+    # Check and install prerequisites if needed
+    if ! command -v figlet >/dev/null 2>&1; then
+        echo -e "${YELLOW}⚠ figlet not found. Installing for better visuals...${RESET}"
+        sudo apt update -qq && sudo apt install -y figlet 2>/dev/null
+    fi
+    if ! command -v lolcat >/dev/null 2>&1; then
+        echo -e "${YELLOW}⚠ lolcat not found. Installing for better visuals...${RESET}"
+        sudo apt install -y lolcat 2>/dev/null
+    fi
+    
+    while true; do
+        show_menu
+        echo -n -e "${BOLD}${CYAN}  Select option: ${RESET}"
+        read -r choice
+        
+        case "$choice" in
+            0)
+                execute_queue
+                ;;
+            [cC])
+                clear_queue
+                ;;
+            [rR])
+                continue
+                ;;
+            [qQ])
+                clear_screen
+                echo -e "\n${GREEN}👋 Thank you for using $APP_NAME by $APP_AUTHOR!${RESET}"
+                exit 0
+                ;;
+            [1-9]|1[0-6])
+                toggle_queue "$choice"
+                ;;
+            *)
+                if [ -n "$choice" ]; then
+                    echo -e "${RED}✗ Invalid option${RESET}"
+                    sleep 1
+                fi
+                ;;
+        esac
+    done
+}
+
+# Check if running with --install flag
+if [ "${1:-}" = "--install" ]; then
+    if [ -z "${2:-}" ]; then
+        echo "Usage: $SCRIPT_NAME --install <toolname>"
+        echo "Available tools: base_packages, git, terraform, aws_cli, docker, docker_compose, lazydocker, ansible, snyk, trivy, gcp, kubernetes, helm, minikube, nmap, python"
+        exit 1
+    fi
+    
+    tool_to_install="$2"
+    if declare -f "install_$tool_to_install" >/dev/null; then
+        clear_screen
+        if command -v figlet >/dev/null 2>&1; then
+            figlet -f slant $APP_NAME 2>/dev/null
+        fi
+        "install_$tool_to_install"
+    else
+        echo "Unknown tool: $tool_to_install"
+        exit 1
+    fi
+elif [ "${1:-}" = "--list" ]; then
+    clear_screen
+    if command -v figlet >/dev/null 2>&1; then
+        figlet -f slant $APP_NAME 2>/dev/null
+    fi
+    echo -e "\n${BOLD}Available Tools:${RESET}\n"
+    for i in {1..16}; do
+        tool="${TOOLS[$i]}"
+        echo "  $tool - ${TOOL_DISPLAY[$tool]}"
+    done
+elif [ "${1:-}" = "--status" ]; then
+    clear_screen
+    if command -v figlet >/dev/null 2>&1; then
+        figlet -f slant $APP_NAME 2>/dev/null
+    fi
+    echo -e "\n${BOLD}Installation Status:${RESET}\n"
+    for i in {1..16}; do
+        tool="${TOOLS[$i]}"
+        if tool_installed "$tool"; then
+            echo -e "  ${GREEN}✓${RESET} $tool - ${TOOL_DISPLAY[$tool]}"
+        else
+            echo -e "  ${RED}✗${RESET} $tool - ${TOOL_DISPLAY[$tool]}"
+        fi
+    done
+elif [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+    if command -v figlet >/dev/null 2>&1; then
+        figlet -f slant $APP_NAME 2>/dev/null
+    fi
+    cat << EOF
+
+$APP_NAME v$SCRIPT_VERSION - DevSecOps Bootstrap Platform
+
+USAGE:
+    $SCRIPT_NAME                    Interactive mode with queue system
+    $SCRIPT_NAME --install <tool>   Install specific tool directly
+    $SCRIPT_NAME --list             List all available tools
+    $SCRIPT_NAME --status           Show installation status
+    $SCRIPT_NAME --help, -h         Show this help message
+
+INTERACTIVE MODE CONTROLS:
+    [1-16]  →  Select/Deselect tool for installation/update
+    [0]     →  Execute installation queue
+    [C]     →  Clear all selections
+    [R]     →  Refresh screen
+    [Q]     →  Quit
+
+AVAILABLE TOOLS:
+EOF
+    for i in {1..16}; do
+        tool="${TOOLS[$i]}"
+        echo "    $tool - ${TOOL_DISPLAY[$tool]}"
+    done
+else
+    interactive_mode
+fi
