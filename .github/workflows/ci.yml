@@ -1,0 +1,224 @@
+name: ZeroTrustKit CI
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "ztk"
+      - ".github/workflows/ci.yml"
+
+  pull_request:
+    paths:
+      - "ztk"
+      - ".github/workflows/ci.yml"
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+concurrency:
+  group: ztk-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Bash Syntax & ShellCheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Check executable
+        run: |
+          test -f ztk
+          test -x ztk
+
+      - name: Bash syntax check
+        run: |
+          bash -n ztk
+
+      - name: Install ShellCheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      - name: Run ShellCheck
+        run: |
+          shellcheck -x -S warning ztk
+
+  runtime:
+    name: ${{ matrix.name }} Runtime Tests
+    needs: lint
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux AMD64
+            os: ubuntu-latest
+            platform: linux
+
+          - name: macOS Apple Silicon
+            os: macos-latest
+            platform: macos
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Prepare ZeroTrustKit
+        run: |
+          chmod +x ztk
+
+      - name: Remove unrelated Homebrew taps
+        if: matrix.platform == 'macos'
+        run: |
+          if brew tap | grep -qx 'aws/tap'; then
+            echo "Removing unrelated aws/tap from CI runner..."
+            brew untap aws/tap
+          fi
+
+      - name: Install modern Bash on macOS
+        if: matrix.platform == 'macos'
+        run: |
+          brew install bash
+
+      - name: Set Bash executable
+        id: bash
+        shell: bash
+        run: |
+          if [[ "${{ matrix.platform }}" == "macos" ]]; then
+            echo "path=$(brew --prefix bash)/bin/bash" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=$(command -v bash)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Show environment
+        run: |
+          uname -a
+          uname -m
+          "${{ steps.bash.outputs.path }}" --version | head -1
+
+      - name: Test version command
+        run: |
+          output="$("${{ steps.bash.outputs.path }}" ./ztk --version)"
+
+          printf '%s\n' "$output"
+
+          echo "$output" |
+            grep -Eq '^ZeroTrustKit v[0-9]+\.[0-9]+\.[0-9]+$'
+
+      - name: Test short version command
+        run: |
+          "${{ steps.bash.outputs.path }}" ./ztk -v |
+            grep -Eq '^ZeroTrustKit v[0-9]+\.[0-9]+\.[0-9]+$'
+
+      - name: Test help command
+        run: |
+          output="$("${{ steps.bash.outputs.path }}" ./ztk --help)"
+
+          printf '%s\n' "$output"
+
+          echo "$output" | grep -q "ZeroTrustKit"
+
+      - name: Test short help command
+        run: |
+          "${{ steps.bash.outputs.path }}" ./ztk -h |
+            grep -q "ZeroTrustKit"
+
+      - name: Verify version is non-interactive
+        shell: bash
+        run: |
+          python3 <<'PY'
+          import subprocess
+
+          command = [
+              "${{ steps.bash.outputs.path }}",
+              "./ztk",
+              "--version",
+          ]
+
+          result = subprocess.run(
+              command,
+              stdin=subprocess.DEVNULL,
+              stdout=subprocess.PIPE,
+              stderr=subprocess.PIPE,
+              text=True,
+              timeout=5,
+          )
+
+          print(result.stdout)
+
+          if result.returncode != 0:
+              print(result.stderr)
+              raise SystemExit(result.returncode)
+          PY
+
+      - name: Verify help is non-interactive
+        shell: bash
+        run: |
+          python3 <<'PY'
+          import subprocess
+
+          command = [
+              "${{ steps.bash.outputs.path }}",
+              "./ztk",
+              "--help",
+          ]
+
+          result = subprocess.run(
+              command,
+              stdin=subprocess.DEVNULL,
+              stdout=subprocess.PIPE,
+              stderr=subprocess.PIPE,
+              text=True,
+              timeout=5,
+          )
+
+          print(result.stdout)
+
+          if result.returncode != 0:
+              print(result.stderr)
+              raise SystemExit(result.returncode)
+          PY
+
+      - name: Reject unknown option
+        shell: bash
+        run: |
+          if "${{ steps.bash.outputs.path }}" ./ztk --definitely-invalid-option; then
+            echo "ERROR: Unknown option unexpectedly returned success."
+            exit 1
+          fi
+
+  ci-success:
+    name: ZeroTrustKit CI Passed
+    if: always()
+    needs:
+      - lint
+      - runtime
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Verify all required jobs passed
+        run: |
+          if [[ "${{ needs.lint.result }}" != "success" ]]; then
+            echo "Lint job failed."
+            exit 1
+          fi
+
+          if [[ "${{ needs.runtime.result }}" != "success" ]]; then
+            echo "Runtime tests failed."
+            exit 1
+          fi
+
+          echo "ZeroTrustKit CI passed successfully."

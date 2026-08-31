@@ -3,11 +3,11 @@
 #===============================================================================
 #  ZeroTrustKit - DevSecOps Bootstrap Platform
 #  Author: Daxxtropezz  
-#  Version: 1.2.1
+#  Version: 1.2.2
 #===============================================================================
 
 SCRIPT_NAME="ztk"
-SCRIPT_VERSION="1.2.1"
+SCRIPT_VERSION="1.2.2"
 APP_NAME="ZeroTrustKit"
 APP_AUTHOR="Daxxtropezz"
 
@@ -95,13 +95,11 @@ case "$ARCH" in
     x86_64|amd64)
         LINUX_ARCH="amd64"
         AWS_ARCH="x86_64"
-        LAZYDOCKER_ARCH="x86_64"
         SNYK_ARCH=""
         ;;
     arm64|aarch64)
         LINUX_ARCH="arm64"
         AWS_ARCH="aarch64"
-        LAZYDOCKER_ARCH="arm64"
         SNYK_ARCH="-arm64"
         ;;
     *)

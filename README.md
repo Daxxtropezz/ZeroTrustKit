@@ -13,7 +13,7 @@ One command. Complete DevSecOps workstation.
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.2.0-blue.svg">
+  <img src="https://img.shields.io/badge/version-1.2.2-blue.svg">
   <img src="https://img.shields.io/badge/platform-Ubuntu%20%7C%20macOS-orange.svg">
   <img src="https://img.shields.io/badge/arch-amd64%20%7C%20arm64-informational.svg">
   <img src="https://img.shields.io/badge/package-APT%20%7C%20Homebrew-informational.svg">
@@ -156,7 +156,7 @@ sudo apt install ztk
 
 ### Supported Linux Architectures
 
-ZTK v1.2.0 detects the host architecture and maps architecture-specific third-party downloads accordingly:
+ZTK v1.2.2 detects the host architecture and maps architecture-specific third-party downloads accordingly:
 
 | Architecture | Common Names | ZTK Support |
 | --- | --- | :---: |
