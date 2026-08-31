@@ -1,5 +1,5 @@
-ztk (1.2.1~resolute) resolute; urgency=medium
+ztk (1.2.2~resolute) resolute; urgency=medium
 
-  * CLI Behavior Fix.
+  * Update Fixes, unsused variables.
 
- -- Daxxtropezz <miraflores.john@gmail.com>  Mon, 31 Aug 2026 14:56:04 +0800
+ -- Daxxtropezz <miraflores.john@gmail.com>  Mon, 31 Aug 2026 16:52:31 +0800
