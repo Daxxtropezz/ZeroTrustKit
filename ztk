@@ -3,11 +3,11 @@
 #===============================================================================
 #  ZeroTrustKit - DevSecOps Bootstrap Platform
 #  Author: Daxxtropezz  
-#  Version: 1.2.0
+#  Version: 1.2.1
 #===============================================================================
 
 SCRIPT_NAME="ztk"
-SCRIPT_VERSION="1.2.0"
+SCRIPT_VERSION="1.2.1"
 APP_NAME="ZeroTrustKit"
 APP_AUTHOR="Daxxtropezz"
 
@@ -690,25 +690,59 @@ execute_queue() {
 }
 
 #===============================================================================
-#  MAIN
+#  CLI / MAIN
 #===============================================================================
 
+show_help() {
+    cat << EOF
+
+$APP_NAME v$SCRIPT_VERSION - DevSecOps Bootstrap Platform
+
+USAGE:
+    $SCRIPT_NAME                    Interactive mode with queue system
+    $SCRIPT_NAME --install <tool>   Install or update a specific tool
+    $SCRIPT_NAME --list             List all available tools
+    $SCRIPT_NAME --status           Show installation status
+    $SCRIPT_NAME --version, -v      Show version information
+    $SCRIPT_NAME --help, -h         Show this help message
+
+INTERACTIVE MODE CONTROLS:
+    [1-17]  →  Select/Deselect tool for installation/update
+    [0]     →  Execute installation queue
+    [C]     →  Clear all selections
+    [R]     →  Refresh screen
+    [Q]     →  Quit
+
+AVAILABLE TOOLS:
+EOF
+    local i tool
+    for i in {1..17}; do
+        tool="${TOOLS[$i]}"
+        echo "    $tool - ${TOOL_DISPLAY[$tool]}"
+    done
+}
+
+show_version() {
+    printf '%s v%s\n' "$APP_NAME" "$SCRIPT_VERSION"
+}
+
 interactive_mode() {
-    # Check and install prerequisites if needed
-    if ! command -v figlet >/dev/null 2>&1; then
-        echo -e "${YELLOW}⚠ figlet not found. Installing for better visuals...${RESET}"
-        pkg_update && pkg_install figlet 2>/dev/null
+    # Refuse immediately when stdin is not an interactive terminal. This avoids
+    # rendering the full menu in CI and prevents jobs from waiting for input.
+    if [[ ! -t 0 ]]; then
+        echo -e "${RED}✗ Interactive mode requires a terminal.${RESET}" >&2
+        echo "Run '$SCRIPT_NAME --help' for non-interactive commands." >&2
+        return 1
     fi
-    if ! command -v lolcat >/dev/null 2>&1; then
-        echo -e "${YELLOW}⚠ lolcat not found. Installing for better visuals...${RESET}"
-        pkg_install lolcat 2>/dev/null
-    fi
-    
+
+    # Visual helpers are intentionally optional. Do not install packages simply
+    # because ZeroTrustKit was started; this keeps startup predictable and makes
+    # --help/--version safe for package-manager and CI environments.
     while true; do
         show_menu
         echo -n -e "${BOLD}${CYAN}  Select option: ${RESET}"
         read -r choice
-        
+
         case "$choice" in
             0)
                 execute_queue
@@ -722,13 +756,13 @@ interactive_mode() {
             [qQ])
                 clear_screen
                 echo -e "\n${GREEN}👋 Thank you for using $APP_NAME by $APP_AUTHOR!${RESET}"
-                exit 0
+                return 0
                 ;;
             [1-9]|1[0-7])
                 toggle_queue "$choice"
                 ;;
             *)
-                if [ -n "$choice" ]; then
+                if [[ -n "$choice" ]]; then
                     echo -e "${RED}✗ Invalid option${RESET}"
                     sleep 1
                 fi
@@ -737,77 +771,64 @@ interactive_mode() {
     done
 }
 
-# Check if running with --install flag
-if [ "${1:-}" = "--install" ]; then
-    if [ -z "${2:-}" ]; then
-        echo "Usage: $SCRIPT_NAME --install <toolname>"
-        echo "Available tools: base_packages, git, terraform, aws_cli, docker, docker_compose, lazydocker, ansible, snyk, trivy, gcp, kubernetes, helm, minikube, nmap, python, azure_cli"
-        exit 1
-    fi
-    
-    tool_to_install="$2"
-    if declare -f "install_$tool_to_install" >/dev/null; then
-        clear_screen
-        if command -v figlet >/dev/null 2>&1; then
-            figlet -f slant $APP_NAME 2>/dev/null
-        fi
-        "install_$tool_to_install"
-    else
-        echo "Unknown tool: $tool_to_install"
-        exit 1
-    fi
-elif [ "${1:-}" = "--list" ]; then
-    clear_screen
-    if command -v figlet >/dev/null 2>&1; then
-        figlet -f slant $APP_NAME 2>/dev/null
-    fi
-    echo -e "\n${BOLD}Available Tools:${RESET}\n"
-    for i in {1..17}; do
-        tool="${TOOLS[$i]}"
-        echo "  $tool - ${TOOL_DISPLAY[$tool]}"
-    done
-elif [ "${1:-}" = "--status" ]; then
-    clear_screen
-    if command -v figlet >/dev/null 2>&1; then
-        figlet -f slant $APP_NAME 2>/dev/null
-    fi
-    echo -e "\n${BOLD}Installation Status:${RESET}\n"
-    for i in {1..17}; do
-        tool="${TOOLS[$i]}"
-        if tool_installed "$tool"; then
-            echo -e "  ${GREEN}✓${RESET} $tool - ${TOOL_DISPLAY[$tool]}"
-        else
-            echo -e "  ${RED}✗${RESET} $tool - ${TOOL_DISPLAY[$tool]}"
-        fi
-    done
-elif [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
-    if command -v figlet >/dev/null 2>&1; then
-        figlet -f slant $APP_NAME 2>/dev/null
-    fi
-    cat << EOF
+main() {
+    # Fast, side-effect-free commands MUST be handled before anything that can
+    # install packages, update package indexes, clear the terminal, or prompt.
+    case "${1:-}" in
+        --help|-h|help)
+            show_help
+            return 0
+            ;;
+        --version|-v|version)
+            show_version
+            return 0
+            ;;
+        --list)
+            local i tool
+            echo -e "\n${BOLD}Available Tools:${RESET}\n"
+            for i in {1..17}; do
+                tool="${TOOLS[$i]}"
+                echo "  $tool - ${TOOL_DISPLAY[$tool]}"
+            done
+            return 0
+            ;;
+        --status)
+            local i tool
+            echo -e "\n${BOLD}Installation Status:${RESET}\n"
+            for i in {1..17}; do
+                tool="${TOOLS[$i]}"
+                if tool_installed "$tool"; then
+                    echo -e "  ${GREEN}✓${RESET} $tool - ${TOOL_DISPLAY[$tool]}"
+                else
+                    echo -e "  ${RED}✗${RESET} $tool - ${TOOL_DISPLAY[$tool]}"
+                fi
+            done
+            return 0
+            ;;
+        --install)
+            if [[ -z "${2:-}" ]]; then
+                echo "Usage: $SCRIPT_NAME --install <toolname>" >&2
+                echo "Available tools: base_packages, git, terraform, aws_cli, docker, docker_compose, lazydocker, ansible, snyk, trivy, gcp, kubernetes, helm, minikube, nmap, python, azure_cli" >&2
+                return 1
+            fi
 
-$APP_NAME v$SCRIPT_VERSION - DevSecOps Bootstrap Platform
+            local tool_to_install="$2"
+            if declare -f "install_$tool_to_install" >/dev/null; then
+                "install_$tool_to_install"
+            else
+                echo "Unknown tool: $tool_to_install" >&2
+                return 1
+            fi
+            ;;
+        "")
+            interactive_mode
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            echo "Run '$SCRIPT_NAME --help' for usage." >&2
+            return 1
+            ;;
+    esac
+}
 
-USAGE:
-    $SCRIPT_NAME                    Interactive mode with queue system
-    $SCRIPT_NAME --install <tool>   Install specific tool directly
-    $SCRIPT_NAME --list             List all available tools
-    $SCRIPT_NAME --status           Show installation status
-    $SCRIPT_NAME --help, -h         Show this help message
-
-INTERACTIVE MODE CONTROLS:
-    [1-17]  →  Select/Deselect tool for installation/update
-    [0]     →  Execute installation queue
-    [C]     →  Clear all selections
-    [R]     →  Refresh screen
-    [Q]     →  Quit
-
-AVAILABLE TOOLS:
-EOF
-    for i in {1..17}; do
-        tool="${TOOLS[$i]}"
-        echo "    $tool - ${TOOL_DISPLAY[$tool]}"
-    done
-else
-    interactive_mode
-fi
+main "$@"
