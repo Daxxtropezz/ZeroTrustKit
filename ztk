@@ -3,11 +3,11 @@
 #===============================================================================
 #  ZeroTrustKit - DevSecOps Bootstrap Platform
 #  Author: Daxxtropezz  
-#  Version: 1.2.2
+#  Version: 1.2.3
 #===============================================================================
 
 SCRIPT_NAME="ztk"
-SCRIPT_VERSION="1.2.2"
+SCRIPT_VERSION="1.2.3"
 APP_NAME="ZeroTrustKit"
 APP_AUTHOR="Daxxtropezz"
 
@@ -21,6 +21,23 @@ WHITE='\033[1;37m'
 BOLD='\033[1m'
 DIM='\033[2m'
 RESET='\033[0m'
+
+if (( BASH_VERSINFO[0] < 4 )); then
+    printf 'Error: ZeroTrustKit requires Bash 4.0 or newer.\n' >&2
+    printf 'Current Bash version: %s\n' "$BASH_VERSION" >&2
+
+    if command -v brew >/dev/null 2>&1; then
+        BREW_BASH="$(brew --prefix bash 2>/dev/null)/bin/bash"
+
+        if [[ -x "$BREW_BASH" ]]; then
+            printf 'Restarting ZeroTrustKit with Homebrew Bash...\n' >&2
+            exec "$BREW_BASH" "$0" "$@"
+        fi
+    fi
+
+    printf 'Install a modern Bash version and try again.\n' >&2
+    exit 1
+fi
 
 # Queue
 declare -a INSTALL_QUEUE=()
@@ -569,63 +586,65 @@ show_banner() {
 }
 
 show_menu() {
+    local i
+    local tool
+    local status
+    local queued
+    local in_queue
+
     clear_screen
     show_banner
-    
+
     # Show system info
-    echo -e "  ${CYAN}System:${RESET} $(uname -n)  |  ${CYAN}User:${RESET} $USER  |  ${CYAN}Date:${RESET} $(date '+%Y-%m-%d %H:%M:%S')"
-    
+    echo -e "  ${CYAN}System:${RESET} $(uname -n)  |  ${CYAN}User:${RESET} ${USER:-$(whoami)}  |  ${CYAN}Date:${RESET} $(date '+%Y-%m-%d %H:%M:%S')"
+
     echo -e "${BOLD}${WHITE}┌─────────────────────────────────────────────────────────────────────────────┐${RESET}"
     echo -e "${BOLD}${WHITE}│                             AVAILABLE TOOLS                                 │${RESET}"
     echo -e "${BOLD}${WHITE}└─────────────────────────────────────────────────────────────────────────────┘${RESET}"
+
     echo -e "${BOLD}${WHITE} LEGEND ${RESET}"
     echo -e "  ${GREEN}● Green Number${RESET} = Tool selected for installation/update"
-    echo -e "  ${Lavender}● Lavender Number${RESET}   = Tool not selected"
-    # echo -e "  ${GREEN}[INSTALLED]${RESET}     = Tool is already installed (will update to latest)"
-    # echo -e "  ${RED}[NOT INSTALLED]${RESET}  = Tool needs installation"
-    # echo -e "  ${GREEN}▶${RESET}              = Selected indicator"
+    echo -e "  ${Lavender}● Lavender Number${RESET} = Tool not selected"
     echo ""
-    
-    # Show tools
+
     for i in {1..17}; do
         tool="${TOOLS[$i]}"
-        
-        # Check installation status
+
         if tool_installed "$tool"; then
             status="${GREEN}[INSTALLED]${RESET}"
         else
             status="${RED}[NOT INSTALLED]${RESET}"
         fi
-        
-        # Check if in queue
+
         in_queue=false
+
         for queued in "${INSTALL_QUEUE[@]}"; do
-            if [ "$queued" = "$tool" ]; then
+            if [[ "$queued" == "$tool" ]]; then
                 in_queue=true
                 break
             fi
         done
-        
-        # Format the line with proper spacing
-        if [ "$in_queue" = true ]; then
-            printf "  ${GREEN}%2d${RESET}. ${GREEN}▶${RESET} %-55s %b\n" "$i" "${TOOL_DISPLAY[$tool]}" "$status"
+
+        if [[ "$in_queue" == true ]]; then
+            printf "  ${GREEN}%2d${RESET}. ${GREEN}▶${RESET} %-55s %b\n" \
+                "$i" "${TOOL_DISPLAY[$tool]}" "$status"
         else
-            printf "  ${Lavender}%2d${RESET}.   %-55s %b\n" "$i" "${TOOL_DISPLAY[$tool]}" "$status"
+            printf "  ${Lavender}%2d${RESET}.   %-55s %b\n" \
+                "$i" "${TOOL_DISPLAY[$tool]}" "$status"
         fi
     done
 
-    # Show queue count
-    if [ ${#INSTALL_QUEUE[@]} -gt 0 ]; then
+    if [[ ${#INSTALL_QUEUE[@]} -gt 0 ]]; then
         echo -e "  ${GREEN}📦 Queue: ${#INSTALL_QUEUE[@]} tool(s) selected for installation/update${RESET}"
     fi
-    
+
     echo -e "${BOLD}${WHITE}════════════════════════════════════════════════════════════════════════════════${RESET}"
     echo -e "${BOLD}${WHITE} CONTROLS ${RESET}"
     echo -e "  ${GREEN}[1-17]${RESET}  →  Select/Deselect tool for installation/update"
     echo -e "  ${GREEN}[0]${RESET}     →  Execute installation queue"
     echo -e "  ${GREEN}[C]${RESET}     →  Clear all selections"
     echo -e "  ${GREEN}[R]${RESET}     →  Refresh screen"
-    echo -e "  ${RED}[Q]${RESET}     →  Quit"
+    echo -e "  ${RED}[Q]${RESET}       →  Quit"
     echo -e "${BOLD}${WHITE}════════════════════════════════════════════════════════════════════════════════${RESET}"
 }
 
