@@ -5,7 +5,7 @@
 </p>
 
 <h3 align="center">
-DevSecOps Bootstrap Platform for Ubuntu
+DevSecOps Bootstrap Platform for Ubuntu and macOS
 </h3>
 
 <p align="center">
@@ -13,8 +13,10 @@ One command. Complete DevSecOps workstation.
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.0.0-blue.svg">
-  <img src="https://img.shields.io/badge/platform-Ubuntu-orange.svg">
+  <img src="https://img.shields.io/badge/version-1.2.0-blue.svg">
+  <img src="https://img.shields.io/badge/platform-Ubuntu%20%7C%20macOS-orange.svg">
+  <img src="https://img.shields.io/badge/arch-amd64%20%7C%20arm64-informational.svg">
+  <img src="https://img.shields.io/badge/package-APT%20%7C%20Homebrew-informational.svg">
   <img src="https://img.shields.io/badge/license-MIT-green.svg">
   <img src="https://img.shields.io/badge/status-active-success.svg">
 </p>
@@ -23,72 +25,120 @@ One command. Complete DevSecOps workstation.
 
 ## Overview
 
-ZeroTrustKit (ZTK) is a DevSecOps bootstrap platform designed to quickly prepare Ubuntu systems for modern cloud, infrastructure, security, and automation workflows.
+ZeroTrustKit (ZTK) is a cross-platform DevSecOps bootstrap platform for quickly preparing Ubuntu and macOS workstations for modern cloud, infrastructure, security, container, Kubernetes, and automation workflows.
 
-The project provides an interactive terminal interface that allows engineers to install and update commonly used DevOps, DevSecOps, Cloud, Kubernetes, and Security tools from a single location.
+ZTK provides an interactive terminal interface that lets engineers install or update commonly used DevOps and DevSecOps tools from one place. It automatically detects the operating system and architecture, then selects the appropriate installation backend:
+
+- **Ubuntu/Linux:** APT and vendor-provided Linux installers
+- **macOS:** Homebrew
+- **Linux architectures:** AMD64/x86_64 and ARM64/aarch64
+- **macOS architectures:** Intel and Apple Silicon
+
+> **macOS note:** Homebrew is the supported installation path for ZTK on macOS. ZTK uses Bash features newer than the Bash version bundled with macOS, so the Homebrew formula declares a compatible Bash dependency.
 
 ## Architecture
 
 ```mermaid
 graph TD
+    A[User Executes ztk] --> B{Detect Platform}
+    B -->|Linux| C{Detect Architecture}
+    B -->|macOS| D[Homebrew]
 
-    A[User Executes `ztk`] --> B{Choose Mode}
+    C -->|AMD64| E[APT / Vendor AMD64 Installers]
+    C -->|ARM64| F[APT / Vendor ARM64 Installers]
 
-    B -->|Interactive| C[Queue System]
-    B -->|CLI Flags| D[Direct Installation]
+    D --> G{Choose Mode}
+    E --> G
+    F --> G
 
-    C --> E[Select Tools]
-    E --> F[Build Installation Queue]
-    F --> G[Execute Queue]
+    G -->|Interactive| H[Queue System]
+    G -->|CLI Flags| I[Direct Installation]
 
-    D --> H[Install Single Tool]
+    H --> J[Select Tools]
+    J --> K[Build Installation Queue]
+    K --> L[Execute Queue]
 
-    G --> I[Tool Detection]
-    H --> I
+    I --> M[Install Single Tool]
 
-    I --> J{Already Installed?}
+    L --> N[Tool Detection]
+    M --> N
 
-    J -->|Yes| K[Update Tool]
-    J -->|No| L[Install Tool]
+    N --> O{Already Installed?}
+    O -->|Yes| P[Update Tool]
+    O -->|No| Q[Install Tool]
 
-    K --> M[Success]
-    L --> M
-
-    M --> N[Ready for DevSecOps Work]
+    P --> R[Ready for DevSecOps Work]
+    Q --> R
 ```
 
 ## Features
 
 ### Interactive Installation Queue
 
-* Select multiple tools
-* Queue-based execution
-* Installation status detection
-* Update existing installations
-* Colorized terminal interface
-* Fast setup experience
+- Select multiple tools before execution
+- Queue-based installation and updates
+- Detect existing installations
+- Update supported tools to newer versions
+- Platform-aware APT/Homebrew backend
+- AMD64 and ARM64 Linux architecture detection
+- Colorized terminal interface
+- Direct single-tool installation through CLI flags
 
 ### Included Tools
 
-| Category               | Tools                                 |
-| ---------------------- | ------------------------------------- |
-| Infrastructure as Code | Terraform                             |
-| Cloud                  | AWS CLI, Google Cloud SDK             |
-| Containers             | Docker, Docker Compose, Lazydocker    |
-| Kubernetes             | kubectl, Helm, Minikube               |
-| Security               | Snyk, Trivy                           |
-| Automation             | Ansible                               |
-| Networking             | Nmap                                  |
-| Development            | Git, Python                           |
-| Utilities              | curl, wget, jq, tmux, zsh, htop, tree |
+| Category | Tools |
+| --- | --- |
+| Infrastructure as Code | Terraform |
+| Cloud | AWS CLI, Google Cloud CLI, Azure CLI |
+| Containers | Docker, Docker Compose, Lazydocker |
+| Kubernetes | kubectl, Helm, Minikube |
+| Security | Snyk, Trivy |
+| Automation | Ansible |
+| Networking | Nmap |
+| Development | Git, Python |
+| Utilities | curl, wget, jq, tmux, zsh, htop, tree |
 
 ---
 
 # Installation
 
-## Option 1: Launchpad PPA (Recommended)
+## macOS — Homebrew (Recommended)
 
-Add the official repository:
+Install ZeroTrustKit directly from the official tap:
+
+```bash
+brew install Daxxtropezz/tap/ztk
+```
+
+Homebrew can install a fully qualified formula directly from a tap, so manually tapping the repository first is optional.
+
+Then launch ZTK:
+
+```bash
+ztk
+```
+
+Alternatively, add the tap first:
+
+```bash
+brew tap Daxxtropezz/tap
+brew install Daxxtropezz/tap/ztk
+```
+
+### macOS Requirements
+
+- Homebrew
+- Intel or Apple Silicon Mac
+
+The Homebrew formula installs a compatible Bash version required by ZTK.
+
+> Docker installation on macOS uses Docker Desktop through Homebrew Cask.
+
+---
+
+## Ubuntu — Launchpad PPA (Recommended)
+
+Add the official PPA and install ZTK:
 
 ```bash
 sudo add-apt-repository ppa:daxxtropezz/ztk
@@ -96,70 +146,83 @@ sudo apt update
 sudo apt install ztk
 ```
 
-Supported Ubuntu Releases:
+### Supported Ubuntu Releases
 
 | Ubuntu Release | Codename |
-| -------------- | -------- |
-| 24.04          | noble    |
-| 22.04          | jammy    |
-| 25.10          | resolute |
+| --- | --- |
+| 24.04 | noble |
+| 22.04 | jammy |
+| 25.10 | resolute |
+
+### Supported Linux Architectures
+
+ZTK v1.2.0 detects the host architecture and maps architecture-specific third-party downloads accordingly:
+
+| Architecture | Common Names | ZTK Support |
+| --- | --- | :---: |
+| AMD64 | `x86_64`, `amd64` | ✓ |
+| ARM64 | `arm64`, `aarch64` | ✓ |
+
+Architecture-aware installation is used for tools such as AWS CLI, kubectl, Minikube, Snyk, and Lazydocker where the upstream project provides architecture-specific artifacts.
+
+> Individual third-party tools are still subject to the architectures and Linux distributions supported by their upstream vendors.
+
+### Azure CLI on Ubuntu
+
+Azure CLI is available as the `azure_cli` ZTK tool.
+
+```bash
+ztk --install azure_cli
+```
+
+ZTK uses Microsoft's Debian/Ubuntu installer when Azure CLI is not already installed and APT for subsequent upgrades.
+
+> Microsoft currently documents Ubuntu 22.04 (`jammy`) and Ubuntu 24.04 (`noble`) as tested Ubuntu releases for Azure CLI packages. On another Ubuntu codename, ZTK displays a warning and attempts the official Microsoft installer, but successful installation is not guaranteed.
 
 ---
 
-## Option 2: Manual APT Repository
+## Ubuntu — Manual APT Repository
 
-Add the repository manually.
+Add the repository manually if you do not want to use `add-apt-repository`.
 
-Replace `YOUR_UBUNTU_VERSION_HERE` with:
+Replace `YOUR_UBUNTU_VERSION_HERE` with a supported PPA codename such as `noble`, `jammy`, or `resolute`:
 
-* noble
-* jammy
-* resolute
-
-```bash
+```text
 deb https://ppa.launchpadcontent.net/daxxtropezz/ztk/ubuntu YOUR_UBUNTU_VERSION_HERE main
 deb-src https://ppa.launchpadcontent.net/daxxtropezz/ztk/ubuntu YOUR_UBUNTU_VERSION_HERE main
 ```
 
-Import repository key and update:
+Update package metadata and install:
 
 ```bash
 sudo apt update
-```
-
-Install:
-
-```bash
 sudo apt install ztk
 ```
 
 ---
 
-## Option 3: Clone Repository
+## Clone Repository
+
+### Ubuntu/Linux
 
 Clone the project directly:
 
 ```bash
-git clone https://github.com/daxxtropezz/ZeroTrustKit.git
-```
-
-Navigate to the project:
-
-```bash
+git clone https://github.com/Daxxtropezz/ZeroTrustKit.git
 cd ZeroTrustKit
-```
-
-Make the script executable:
-
-```bash
 chmod +x ztk
-```
-
-Run:
-
-```bash
 ./ztk
 ```
+
+### macOS
+
+For macOS, the recommended and supported installation method is Homebrew:
+
+```bash
+brew install Daxxtropezz/tap/ztk
+```
+
+A stock macOS installation includes an older system Bash that does not support all Bash features used by ZTK. Avoid running the repository script directly with `/bin/bash` unless you have already installed and selected a modern Bash version.
 
 ---
 
@@ -167,27 +230,27 @@ Run:
 
 ## Interactive Mode
 
-Launch:
+Launch ZTK:
 
 ```bash
 ztk
 ```
 
-Select tools:
+Controls:
 
 ```text
-[1-16] Select/Deselect Tool
-[0] Execute Queue
-[C] Clear Queue
-[R] Refresh
-[Q] Quit
+[1-17]  Select/Deselect Tool
+[0]     Execute Queue
+[C]     Clear Queue
+[R]     Refresh
+[Q]     Quit
 ```
 
 ---
 
-## Install Individual Tool
+## Install an Individual Tool
 
-Example:
+Install Terraform:
 
 ```bash
 ztk --install terraform
@@ -203,6 +266,12 @@ Install Trivy:
 
 ```bash
 ztk --install trivy
+```
+
+Install Azure CLI:
+
+```bash
+ztk --install azure_cli
 ```
 
 ---
@@ -233,23 +302,43 @@ ztk --help
 
 # Supported Tools
 
-| Tool             | Purpose                      |
-| ---------------- | ---------------------------- |
-| Git              | Version Control              |
-| Terraform        | Infrastructure as Code       |
-| AWS CLI          | AWS Management               |
-| Docker           | Containers                   |
-| Docker Compose   | Multi-container Applications |
-| Lazydocker       | Docker TUI                   |
-| Ansible          | Automation                   |
-| Snyk             | Security Scanning            |
-| Trivy            | Vulnerability Scanning       |
-| Google Cloud SDK | GCP Management               |
-| kubectl          | Kubernetes                   |
-| Helm             | Kubernetes Package Manager   |
-| Minikube         | Local Kubernetes             |
-| Nmap             | Network Discovery            |
-| Python           | Development Environment      |
+| Tool | Purpose | Ubuntu AMD64 | Ubuntu ARM64 | macOS |
+| --- | --- | :---: | :---: | :---: |
+| Git | Version Control | ✓ | ✓ | ✓ |
+| Terraform | Infrastructure as Code | ✓ | ✓ | ✓ |
+| AWS CLI | AWS Management | ✓ | ✓ | ✓ |
+| Docker | Container Platform | ✓ | ✓ | ✓ |
+| Docker Compose | Multi-container Applications | ✓ | ✓ | ✓ |
+| Lazydocker | Docker TUI | ✓ | ✓ | ✓ |
+| Ansible | Automation | ✓ | ✓ | ✓ |
+| Snyk | Security Scanning | ✓ | ✓ | ✓ |
+| Trivy | Vulnerability Scanning | ✓ | ✓ | ✓ |
+| Google Cloud CLI | GCP Management | ✓ | ✓ | ✓ |
+| Azure CLI | Microsoft Azure Management | ✓* | ✓* | ✓ |
+| kubectl | Kubernetes CLI | ✓ | ✓ | ✓ |
+| Helm | Kubernetes Package Manager | ✓ | ✓ | ✓ |
+| Minikube | Local Kubernetes Cluster | ✓ | ✓ | ✓ |
+| Nmap | Network Discovery | ✓ | ✓ | ✓ |
+| Python | Development Environment | ✓ | ✓ | ✓ |
+
+\* Azure CLI installation on Ubuntu depends on Microsoft's package support for the detected Ubuntu release. ZTK warns when the detected Ubuntu codename is outside the releases currently documented as tested by Microsoft.
+
+---
+
+# Platform and Architecture Behavior
+
+ZTK automatically detects the host operating system using `uname -s` and the architecture using `uname -m`.
+
+```text
+Linux / x86_64  -> APT + AMD64 vendor installers
+Linux / aarch64 -> APT + ARM64 vendor installers
+macOS / Intel   -> Homebrew
+macOS / ARM64   -> Homebrew
+```
+
+On macOS, ZTK uses Homebrew formulae and casks where appropriate. On Ubuntu, it uses APT, PPAs, and vendor-provided installers.
+
+For architecture-specific Linux downloads, ZTK translates the host architecture into the naming expected by the upstream project. For example, an `aarch64` Linux host is mapped to ARM64-compatible artifacts.
 
 ---
 
@@ -262,25 +351,33 @@ ztk --help
 
 # Roadmap
 
-Future planned additions:
+Future planned improvements include:
 
-* Azure CLI (Not available in resolute yet)
-<!-- * OpenTofu
-* Podman
-* Falco
-* kube-bench
-* kube-hunter
-* Checkov
-* Terrascan
-* OWASP ZAP
-* Burp Suite Community
-* Semgrep
-* GitHub CLI
-* GitLab CLI
-* ArgoCD CLI
-* FluxCD
-* Vault CLI
-* Tailscale -->
+- More DevSecOps and cloud-native tooling
+- Improved installation result and error reporting
+- Platform-specific health checks
+- Expanded Linux distribution support
+- Automated release and package validation
+
+<!--
+Potential tools:
+- OpenTofu
+- Podman
+- Falco
+- kube-bench
+- kube-hunter
+- Checkov
+- Terrascan
+- OWASP ZAP
+- Burp Suite Community
+- Semgrep
+- GitHub CLI
+- GitLab CLI
+- ArgoCD CLI
+- FluxCD
+- Vault CLI
+- Tailscale
+-->
 
 ---
 
@@ -288,17 +385,17 @@ Future planned additions:
 
 Contributions are welcome.
 
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push your branch
-5. Open a Pull Request
+1. Fork the repository.
+2. Create a feature branch.
+3. Commit your changes.
+4. Push the branch.
+5. Open a Pull Request.
 
 ---
 
 # Security
 
-If you discover a security issue, please open a private security report through GitHub Security Advisories.
+If you discover a security issue, please open a private security report through GitHub Security Advisories rather than a public issue.
 
 ---
 
@@ -310,4 +407,4 @@ Daxxtropezz
 
 # License
 
-This project is licensed under the [MIT LICENSE](LICENSE).
+This project is licensed under the [MIT License](LICENSE).

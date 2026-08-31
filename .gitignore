@@ -10,3 +10,4 @@ fastfetch.kdev4
 *.user
 *.user.*
 *.swp
+*.old_version

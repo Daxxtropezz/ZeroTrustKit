@@ -1,13 +1,13 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 #===============================================================================
 #  ZeroTrustKit - DevSecOps Bootstrap Platform
 #  Author: Daxxtropezz  
-#  Version: 1.0.0
+#  Version: 1.2.0
 #===============================================================================
 
 SCRIPT_NAME="ztk"
-SCRIPT_VERSION="1.0.0"
+SCRIPT_VERSION="1.2.0"
 APP_NAME="ZeroTrustKit"
 APP_AUTHOR="Daxxtropezz"
 
@@ -43,6 +43,7 @@ TOOLS[13]="helm"
 TOOLS[14]="minikube"
 TOOLS[15]="nmap"
 TOOLS[16]="python"
+TOOLS[17]="azure_cli"
 
 # Tool display names
 declare -A TOOL_DISPLAY
@@ -62,6 +63,97 @@ TOOL_DISPLAY[helm]="Helm - Kubernetes Package Manager"
 TOOL_DISPLAY[minikube]="Minikube - Local Kubernetes Cluster"
 TOOL_DISPLAY[nmap]="Nmap - Network Discovery"
 TOOL_DISPLAY[python]="Python 3 + pip + virtualenv"
+TOOL_DISPLAY[azure_cli]="Azure CLI - Microsoft Azure"
+
+#===============================================================================
+# PLATFORM DETECTION
+#===============================================================================
+
+OS="$(uname -s)"
+ARCH="$(uname -m)"
+
+case "$OS" in
+    Linux)
+        PLATFORM="linux"
+        PACKAGE_MANAGER="apt"
+        ;;
+    Darwin)
+        PLATFORM="macos"
+        PACKAGE_MANAGER="brew"
+        ;;
+    *)
+        echo "❌ Unsupported operating system: $OS"
+        exit 1
+        ;;
+esac
+
+#===============================================================================
+# ARCHITECTURE DETECTION
+#===============================================================================
+
+case "$ARCH" in
+    x86_64|amd64)
+        LINUX_ARCH="amd64"
+        AWS_ARCH="x86_64"
+        LAZYDOCKER_ARCH="x86_64"
+        SNYK_ARCH=""
+        ;;
+    arm64|aarch64)
+        LINUX_ARCH="arm64"
+        AWS_ARCH="aarch64"
+        LAZYDOCKER_ARCH="arm64"
+        SNYK_ARCH="-arm64"
+        ;;
+    *)
+        echo "❌ Unsupported architecture: $ARCH"
+        exit 1
+        ;;
+esac
+
+#===============================================================================
+# PACKAGE MANAGER HELPERS
+#===============================================================================
+
+ensure_homebrew() {
+    if [[ "$PLATFORM" == "macos" ]]; then
+        if ! command -v brew >/dev/null 2>&1; then
+            echo -e "${YELLOW}→ Installing Homebrew...${RESET}"
+            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+            # Apple Silicon support
+            if [[ -x "/opt/homebrew/bin/brew" ]]; then
+                eval "$(/opt/homebrew/bin/brew shellenv)"
+            elif [[ -x "/usr/local/bin/brew" ]]; then
+                eval "$(/usr/local/bin/brew shellenv)"
+            fi
+        fi
+    fi
+}
+
+pkg_install() {
+    if [[ "$PACKAGE_MANAGER" == "brew" ]]; then
+        ensure_homebrew
+        brew install "$@"
+    else
+        sudo apt install -y "$@"
+    fi
+}
+
+pkg_update() {
+    if [[ "$PACKAGE_MANAGER" == "brew" ]]; then
+        brew update
+    else
+        sudo apt update -qq
+    fi
+}
+
+pkg_upgrade() {
+    if [[ "$PACKAGE_MANAGER" == "brew" ]]; then
+        brew upgrade "$@" || brew install "$@"
+    else
+        sudo apt upgrade -y "$@"
+    fi
+}
 
 #===============================================================================
 #  UTILITY FUNCTIONS
@@ -90,6 +182,7 @@ tool_installed() {
         minikube) command -v minikube >/dev/null 2>&1 ;;
         nmap) command -v nmap >/dev/null 2>&1 ;;
         python) command -v python3 >/dev/null 2>&1 ;;
+        azure_cli) command -v az >/dev/null 2>&1 ;;
         *) return 1 ;;
     esac
 }
@@ -103,240 +196,358 @@ update_if_installed() {
     return 1
 }
 
+brew_cask_install_or_upgrade() {
+    local package="$1"
+
+    ensure_homebrew
+
+    if brew list --cask "$package" >/dev/null 2>&1; then
+        echo -e "${YELLOW}→ Updating $package...${RESET}"
+        brew upgrade --cask "$package" || true
+    else
+        echo -e "${CYAN}→ Installing $package...${RESET}"
+        brew install --cask "$package"
+    fi
+}
+
+brew_install_or_upgrade() {
+    local package="$1"
+
+    ensure_homebrew
+
+    if brew list --formula "$package" >/dev/null 2>&1; then
+        echo -e "${YELLOW}→ Updating $package...${RESET}"
+        brew upgrade "$package" || true
+    else
+        echo -e "${CYAN}→ Installing $package...${RESET}"
+        brew install "$package"
+    fi
+}
+
 #===============================================================================
 #  INSTALLATION FUNCTIONS
 #===============================================================================
 
 install_base_packages() {
     echo -e "${CYAN}→ Installing base packages...${RESET}"
-    sudo apt update -qq
-    sudo apt install -y \
-        curl \
-        wget \
-        git \
-        unzip \
-        gnupg2 \
-        software-properties-common \
-        build-essential \
-        apt-transport-https \
-        ca-certificates \
-        jq \
-        tree \
-        htop \
-        tmux \
-        zsh \
-        || echo -e "${RED}⚠ Some base packages failed to install${RESET}"
+
+    pkg_update
+
+    if [[ "$PLATFORM" == "macos" ]]; then
+        pkg_install curl wget git jq tree htop tmux zsh unzip
+    else
+        pkg_install \
+            curl wget git unzip gnupg2 software-properties-common \
+            build-essential apt-transport-https ca-certificates \
+            jq tree htop tmux zsh
+    fi
+
     echo -e "${GREEN}✓ Base packages installed${RESET}"
 }
 
 install_git() {
-    if update_if_installed git; then
-        sudo apt update -qq && sudo apt upgrade -y git
-        echo -e "${GREEN}✓ Git updated to latest version${RESET}"
-        return 0
-    fi
-    echo -e "${CYAN}→ Installing Git...${RESET}"
-    sudo apt install -y git
-    echo -e "${GREEN}✓ Git installed${RESET}"
+    echo -e "${CYAN}→ Installing/Updating Git...${RESET}"
+
+    pkg_update
+    pkg_upgrade git
+
+    echo -e "${GREEN}✓ Git ready${RESET}"
 }
 
 install_terraform() {
-    if update_if_installed terraform; then
-        sudo apt update -qq && sudo apt upgrade -y terraform
-        echo -e "${GREEN}✓ Terraform updated to latest version${RESET}"
-        return 0
+    echo -e "${CYAN}→ Installing/Updating Terraform...${RESET}"
+
+    if [[ "$PLATFORM" == "macos" ]]; then
+        brew tap hashicorp/tap
+
+        if brew list --formula hashicorp/tap/terraform >/dev/null 2>&1; then
+            brew upgrade hashicorp/tap/terraform || true
+        else
+            brew install hashicorp/tap/terraform
+        fi
+    else
+        wget -qO- https://apt.releases.hashicorp.com/gpg \
+            | sudo gpg --dearmor \
+            -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" \
+            | sudo tee /etc/apt/sources.list.d/hashicorp.list >/dev/null
+
+        pkg_update
+
+        if tool_installed terraform; then
+            sudo apt install --only-upgrade -y terraform
+        else
+            sudo apt install -y terraform
+        fi
     fi
-    echo -e "${CYAN}→ Installing Terraform...${RESET}"
-    wget -qO- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list > /dev/null
-    sudo apt update -qq
-    sudo apt install -y terraform
-    echo -e "${GREEN}✓ Terraform installed${RESET}"
+
+    echo -e "${GREEN}✓ Terraform ready${RESET}"
 }
 
 install_aws_cli() {
-    if update_if_installed aws_cli; then
-        curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
+
+    echo -e "${CYAN}→ Installing AWS CLI...${RESET}"
+
+    if [[ "$PLATFORM" == "macos" ]]; then
+        brew_install_or_upgrade awscli
+    else
+        curl -s https://awscli.amazonaws.com/awscli-exe-linux-${AWS_ARCH}.zip \
+            -o /tmp/awscliv2.zip
+
         unzip -q /tmp/awscliv2.zip -d /tmp
         sudo /tmp/aws/install --update
         rm -rf /tmp/aws /tmp/awscliv2.zip
-        echo -e "${GREEN}✓ AWS CLI updated to latest version${RESET}"
-        return 0
     fi
-    echo -e "${CYAN}→ Installing AWS CLI...${RESET}"
-    curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
-    unzip -q /tmp/awscliv2.zip -d /tmp
-    sudo /tmp/aws/install
-    rm -rf /tmp/aws /tmp/awscliv2.zip
+
     echo -e "${GREEN}✓ AWS CLI installed${RESET}"
 }
 
 install_docker() {
-    if update_if_installed docker; then
-        sudo apt update -qq && sudo apt upgrade -y docker-ce
-        echo -e "${GREEN}✓ Docker updated to latest version${RESET}"
-        return 0
+
+    echo -e "${CYAN}→ Installing/Updating Docker...${RESET}"
+
+    if [[ "$PLATFORM" == "macos" ]]; then
+        brew_cask_install_or_upgrade docker-desktop
+    else
+        if tool_installed docker; then
+            pkg_update
+            sudo apt install --only-upgrade -y docker-ce
+        else
+            curl -fsSL https://get.docker.com | sudo sh
+            sudo usermod -aG docker "$USER"
+        fi
     fi
-    echo -e "${CYAN}→ Installing Docker...${RESET}"
-    curl -fsSL https://get.docker.com | sudo sh
-    sudo usermod -aG docker "$USER"
-    echo -e "${GREEN}✓ Docker installed${RESET}"
+
+    echo -e "${GREEN}✓ Docker ready${RESET}"
 }
 
 install_docker_compose() {
-    if update_if_installed docker_compose; then
-        sudo rm -f /usr/local/bin/docker-compose
-        sudo curl -sL "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-        sudo chmod +x /usr/local/bin/docker-compose
-        echo -e "${GREEN}✓ Docker Compose updated to latest version${RESET}"
-        return 0
-    fi
+
     echo -e "${CYAN}→ Installing Docker Compose...${RESET}"
-    sudo curl -sL "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-    sudo chmod +x /usr/local/bin/docker-compose
+
+    if [[ "$PLATFORM" == "macos" ]]; then
+        brew_install_or_upgrade  docker-compose
+    else
+        sudo curl -sL \
+        "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" \
+        -o /usr/local/bin/docker-compose
+
+        sudo chmod +x /usr/local/bin/docker-compose
+    fi
+
     echo -e "${GREEN}✓ Docker Compose installed${RESET}"
 }
 
 install_lazydocker() {
-    if update_if_installed lazydocker; then
-        sudo rm -f /usr/local/bin/lazydocker
-        curl -sL https://github.com/jesseduffield/lazydocker/releases/latest/download/lazydocker_Linux_x86_64.tar.gz | tar xz
-        sudo mv lazydocker /usr/local/bin/
-        echo -e "${GREEN}✓ Lazydocker updated to latest version${RESET}"
-        return 0
+    echo -e "${CYAN}→ Installing/Updating Lazydocker...${RESET}"
+
+    if [[ "$PLATFORM" == "macos" ]]; then
+        brew_install_or_upgrade lazydocker
+    else
+        # Upstream installer handles amd64/arm64 architecture mapping.
+        curl -fsSL https://raw.githubusercontent.com/jesseduffield/lazydocker/master/scripts/install_update_linux.sh \
+            | DIR=/usr/local/bin sudo -E bash
     fi
-    echo -e "${CYAN}→ Installing Lazydocker...${RESET}"
-    curl -sL https://github.com/jesseduffield/lazydocker/releases/latest/download/lazydocker_Linux_x86_64.tar.gz | tar xz
-    sudo mv lazydocker /usr/local/bin/
-    echo -e "${GREEN}✓ Lazydocker installed${RESET}"
+
+    echo -e "${GREEN}✓ Lazydocker ready${RESET}"
 }
 
 install_ansible() {
-    if update_if_installed ansible; then
-        sudo apt update -qq && sudo apt upgrade -y ansible
-        echo -e "${GREEN}✓ Ansible updated to latest version${RESET}"
-        return 0
-    fi
+
     echo -e "${CYAN}→ Installing Ansible...${RESET}"
-    sudo apt-add-repository --yes --update ppa:ansible/ansible
-    sudo apt install -y ansible
+
+    if [[ "$PLATFORM" == "macos" ]]; then
+        brew_install_or_upgrade  ansible
+    else
+        sudo apt-add-repository --yes --update ppa:ansible/ansible
+        pkg_install ansible
+    fi
+
     echo -e "${GREEN}✓ Ansible installed${RESET}"
 }
 
 install_snyk() {
-    if update_if_installed snyk; then
-        sudo rm -f /usr/local/bin/snyk
-        curl -sL https://static.snyk.io/cli/latest/snyk-linux -o /tmp/snyk
-        sudo mv /tmp/snyk /usr/local/bin/snyk
-        sudo chmod +x /usr/local/bin/snyk
-        echo -e "${GREEN}✓ Snyk updated to latest version${RESET}"
-        return 0
+    echo -e "${CYAN}→ Installing/Updating Snyk...${RESET}"
+
+    if [[ "$PLATFORM" == "macos" ]]; then
+        brew_install_or_upgrade snyk-cli
+    else
+        local snyk_url="https://downloads.snyk.io/cli/stable/snyk-linux${SNYK_ARCH}"
+        curl --compressed -fsSL "$snyk_url" -o /tmp/snyk
+        sudo install -m 0755 /tmp/snyk /usr/local/bin/snyk
+        rm -f /tmp/snyk
     fi
-    echo -e "${CYAN}→ Installing Snyk...${RESET}"
-    curl -sL https://static.snyk.io/cli/latest/snyk-linux -o /tmp/snyk
-    sudo mv /tmp/snyk /usr/local/bin/snyk
-    sudo chmod +x /usr/local/bin/snyk
-    echo -e "${GREEN}✓ Snyk installed${RESET}"
+
+    echo -e "${GREEN}✓ Snyk ready${RESET}"
 }
 
 install_trivy() {
-    if update_if_installed trivy; then
-        sudo apt update -qq && sudo apt upgrade -y trivy
-        echo -e "${GREEN}✓ Trivy updated to latest version${RESET}"
-        return 0
+    echo -e "${CYAN}→ Installing/Updating Trivy...${RESET}"
+
+    if [[ "$PLATFORM" == "macos" ]]; then
+        brew_install_or_upgrade trivy
+    else
+        if update_if_installed trivy; then
+            pkg_update && sudo apt upgrade -y trivy
+            echo -e "${GREEN}✓ Trivy updated to latest version${RESET}"
+            return 0
+        fi
+        sudo apt install -y wget gnupg
+        wget -qO- https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg
+        echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list
+        pkg_update
+        sudo apt install -y trivy
     fi
-    echo -e "${CYAN}→ Installing Trivy...${RESET}"
-    sudo apt install -y wget gnupg
-    wget -qO- https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg
-    echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list
-    sudo apt update -qq
-    sudo apt install -y trivy
-    echo -e "${GREEN}✓ Trivy installed${RESET}"
+
+    echo -e "${GREEN}✓ Trivy ready${RESET}"
 }
 
 install_gcp() {
-    if update_if_installed gcp; then
-        sudo apt update -qq && sudo apt upgrade -y google-cloud-sdk
-        echo -e "${GREEN}✓ Google Cloud SDK updated to latest version${RESET}"
-        return 0
-    fi
+
     echo -e "${CYAN}→ Installing Google Cloud SDK...${RESET}"
-    sudo rm -f /etc/apt/sources.list.d/google-cloud-sdk.list
-    echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list
-    curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
-    sudo apt update -qq
-    sudo apt install -y google-cloud-sdk
+
+    if [[ "$PLATFORM" == "macos" ]]; then
+        brew_cask_install_or_upgrade gcloud-cli
+    else
+        if update_if_installed gcp; then
+            pkg_update && sudo apt install --only-upgrade -y google-cloud-cli
+            echo -e "${GREEN}✓ Google Cloud SDK updated to latest version${RESET}"
+            return 0
+        fi
+        sudo rm -f /etc/apt/sources.list.d/google-cloud-sdk.list
+        echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list
+        curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
+        pkg_update
+        sudo apt install -y google-cloud-cli
+    fi
+
     echo -e "${GREEN}✓ Google Cloud SDK installed${RESET}"
 }
 
+install_azure_cli() {
+    echo -e "${CYAN}→ Installing/Updating Azure CLI...${RESET}"
+
+    if [[ "$PLATFORM" == "macos" ]]; then
+        brew_install_or_upgrade azure-cli
+    else
+        local distro_id=""
+        local distro_codename=""
+
+        if [[ -r /etc/os-release ]]; then
+            # shellcheck disable=SC1091
+            . /etc/os-release
+            distro_id="${ID:-}"
+            distro_codename="${VERSION_CODENAME:-${UBUNTU_CODENAME:-}}"
+        fi
+
+        if [[ "$distro_id" == "ubuntu" && "$distro_codename" != "jammy" && "$distro_codename" != "noble" ]]; then
+            echo -e "${YELLOW}⚠ Microsoft currently documents Azure CLI APT packages as tested on Ubuntu 22.04 (jammy) and 24.04 (noble).${RESET}"
+            echo -e "${YELLOW}  Detected Ubuntu codename: ${distro_codename:-unknown}. Installation will still be attempted using Microsoft's installer.${RESET}"
+        fi
+
+        if tool_installed azure_cli; then
+            pkg_update
+            sudo apt install --only-upgrade -y azure-cli
+        else
+            curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+        fi
+    fi
+
+    echo -e "${GREEN}✓ Azure CLI ready${RESET}"
+}
+
 install_kubernetes() {
-    if update_if_installed kubernetes; then
-        curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+
+    echo -e "${CYAN}→ Installing Kubectl...${RESET}"
+
+    if [[ "$PLATFORM" == "macos" ]]; then
+        brew_install_or_upgrade kubectl
+    else
+        if update_if_installed kubernetes; then
+            curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/${LINUX_ARCH}/kubectl"
+            sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+            rm kubectl
+            echo -e "${GREEN}✓ Kubectl updated to latest version${RESET}"
+            return 0
+        fi
+        curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/${LINUX_ARCH}/kubectl"
         sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
         rm kubectl
-        echo -e "${GREEN}✓ Kubectl updated to latest version${RESET}"
-        return 0
     fi
-    echo -e "${CYAN}→ Installing Kubectl...${RESET}"
-    curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-    sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-    rm kubectl
     echo -e "${GREEN}✓ Kubectl installed${RESET}"
 }
 
 install_helm() {
-    if update_if_installed helm; then
+
+    echo -e "${CYAN}→ Installing Helm...${RESET}"
+
+    if [[ "$PLATFORM" == "macos" ]]; then
+        brew_install_or_upgrade helm
+    else
+        if update_if_installed helm; then
+            curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+            chmod 700 get_helm.sh
+            ./get_helm.sh
+            rm get_helm.sh
+            echo -e "${GREEN}✓ Helm updated to latest version${RESET}"
+            return 0
+        fi
         curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
         chmod 700 get_helm.sh
         ./get_helm.sh
         rm get_helm.sh
-        echo -e "${GREEN}✓ Helm updated to latest version${RESET}"
-        return 0
     fi
-    echo -e "${CYAN}→ Installing Helm...${RESET}"
-    curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
-    chmod 700 get_helm.sh
-    ./get_helm.sh
-    rm get_helm.sh
     echo -e "${GREEN}✓ Helm installed${RESET}"
 }
 
 install_minikube() {
-    if update_if_installed minikube; then
-        curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
-        sudo install minikube-linux-amd64 /usr/local/bin/minikube
-        rm minikube-linux-amd64
-        echo -e "${GREEN}✓ Minikube updated to latest version${RESET}"
-        return 0
-    fi
     echo -e "${CYAN}→ Installing Minikube...${RESET}"
-    curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
-    sudo install minikube-linux-amd64 /usr/local/bin/minikube
-    rm minikube-linux-amd64
+    
+    if [[ "$PLATFORM" == "macos" ]]; then
+        brew_install_or_upgrade minikube
+    else
+        if update_if_installed minikube; then
+            curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-${LINUX_ARCH}
+            sudo install minikube-linux-${LINUX_ARCH} /usr/local/bin/minikube
+            rm minikube-linux-${LINUX_ARCH}
+            echo -e "${GREEN}✓ Minikube updated to latest version${RESET}"
+            return 0
+        fi
+        curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-${LINUX_ARCH}
+        sudo install minikube-linux-${LINUX_ARCH} /usr/local/bin/minikube
+        rm minikube-linux-${LINUX_ARCH}
+    fi
     echo -e "${GREEN}✓ Minikube installed${RESET}"
 }
 
 install_nmap() {
-    if update_if_installed nmap; then
-        sudo apt update -qq && sudo apt upgrade -y nmap
-        echo -e "${GREEN}✓ Nmap updated to latest version${RESET}"
-        return 0
+    echo -e "${CYAN}→ Installing/Updating Nmap...${RESET}"
+
+    if [[ "$PLATFORM" == "macos" ]]; then
+        brew_install_or_upgrade nmap
+    else
+        pkg_update
+
+        if tool_installed nmap; then
+            sudo apt install --only-upgrade -y nmap
+        else
+            sudo apt install -y nmap
+        fi
     fi
-    echo -e "${CYAN}→ Installing Nmap...${RESET}"
-    sudo apt install -y nmap
-    echo -e "${GREEN}✓ Nmap installed${RESET}"
+
+    echo -e "${GREEN}✓ Nmap ready${RESET}"
 }
 
 install_python() {
-    if update_if_installed python; then
-        sudo apt update -qq && sudo apt upgrade -y python3 python3-pip python3-venv
-        pip3 install --upgrade pip
-        echo -e "${GREEN}✓ Python tools updated to latest version${RESET}"
-        return 0
-    fi
     echo -e "${CYAN}→ Installing Python 3, pip, and virtualenv...${RESET}"
-    sudo apt install -y python3 python3-pip python3-venv python3-dev
-    pip3 install --upgrade pip
+    if [[ "$PLATFORM" == "macos" ]]; then
+        brew_install_or_upgrade python
+        pip3 install virtualenv
+    else
+        pkg_install python3 python3-pip python3-venv python3-dev
+        pip3 install --upgrade pip virtualenv
+    fi
     echo -e "${GREEN}✓ Python 3, pip, and virtualenv installed${RESET}"
 }
 
@@ -378,7 +589,7 @@ show_menu() {
     echo ""
     
     # Show tools
-    for i in {1..16}; do
+    for i in {1..17}; do
         tool="${TOOLS[$i]}"
         
         # Check installation status
@@ -412,7 +623,7 @@ show_menu() {
     
     echo -e "${BOLD}${WHITE}════════════════════════════════════════════════════════════════════════════════${RESET}"
     echo -e "${BOLD}${WHITE} CONTROLS ${RESET}"
-    echo -e "  ${GREEN}[1-16]${RESET}  →  Select/Deselect tool for installation/update"
+    echo -e "  ${GREEN}[1-17]${RESET}  →  Select/Deselect tool for installation/update"
     echo -e "  ${GREEN}[0]${RESET}     →  Execute installation queue"
     echo -e "  ${GREEN}[C]${RESET}     →  Clear all selections"
     echo -e "  ${GREEN}[R]${RESET}     →  Refresh screen"
@@ -486,11 +697,11 @@ interactive_mode() {
     # Check and install prerequisites if needed
     if ! command -v figlet >/dev/null 2>&1; then
         echo -e "${YELLOW}⚠ figlet not found. Installing for better visuals...${RESET}"
-        sudo apt update -qq && sudo apt install -y figlet 2>/dev/null
+        pkg_update && pkg_install figlet 2>/dev/null
     fi
     if ! command -v lolcat >/dev/null 2>&1; then
         echo -e "${YELLOW}⚠ lolcat not found. Installing for better visuals...${RESET}"
-        sudo apt install -y lolcat 2>/dev/null
+        pkg_install lolcat 2>/dev/null
     fi
     
     while true; do
@@ -513,7 +724,7 @@ interactive_mode() {
                 echo -e "\n${GREEN}👋 Thank you for using $APP_NAME by $APP_AUTHOR!${RESET}"
                 exit 0
                 ;;
-            [1-9]|1[0-6])
+            [1-9]|1[0-7])
                 toggle_queue "$choice"
                 ;;
             *)
@@ -530,7 +741,7 @@ interactive_mode() {
 if [ "${1:-}" = "--install" ]; then
     if [ -z "${2:-}" ]; then
         echo "Usage: $SCRIPT_NAME --install <toolname>"
-        echo "Available tools: base_packages, git, terraform, aws_cli, docker, docker_compose, lazydocker, ansible, snyk, trivy, gcp, kubernetes, helm, minikube, nmap, python"
+        echo "Available tools: base_packages, git, terraform, aws_cli, docker, docker_compose, lazydocker, ansible, snyk, trivy, gcp, kubernetes, helm, minikube, nmap, python, azure_cli"
         exit 1
     fi
     
@@ -551,7 +762,7 @@ elif [ "${1:-}" = "--list" ]; then
         figlet -f slant $APP_NAME 2>/dev/null
     fi
     echo -e "\n${BOLD}Available Tools:${RESET}\n"
-    for i in {1..16}; do
+    for i in {1..17}; do
         tool="${TOOLS[$i]}"
         echo "  $tool - ${TOOL_DISPLAY[$tool]}"
     done
@@ -561,7 +772,7 @@ elif [ "${1:-}" = "--status" ]; then
         figlet -f slant $APP_NAME 2>/dev/null
     fi
     echo -e "\n${BOLD}Installation Status:${RESET}\n"
-    for i in {1..16}; do
+    for i in {1..17}; do
         tool="${TOOLS[$i]}"
         if tool_installed "$tool"; then
             echo -e "  ${GREEN}✓${RESET} $tool - ${TOOL_DISPLAY[$tool]}"
@@ -585,7 +796,7 @@ USAGE:
     $SCRIPT_NAME --help, -h         Show this help message
 
 INTERACTIVE MODE CONTROLS:
-    [1-16]  →  Select/Deselect tool for installation/update
+    [1-17]  →  Select/Deselect tool for installation/update
     [0]     →  Execute installation queue
     [C]     →  Clear all selections
     [R]     →  Refresh screen
@@ -593,7 +804,7 @@ INTERACTIVE MODE CONTROLS:
 
 AVAILABLE TOOLS:
 EOF
-    for i in {1..16}; do
+    for i in {1..17}; do
         tool="${TOOLS[$i]}"
         echo "    $tool - ${TOOL_DISPLAY[$tool]}"
     done
